@@ -32,6 +32,13 @@ jobs:
           app-id: "872585"
           private-key: ${{ secrets.GIT_AUTOMATION_PK }}
 
+      # https://github.com/int128/wait-for-workflows-action
+      - name: Wait for workflows to finish
+        timeout-minutes: 10
+        uses: int128/wait-for-workflows-action@a1d37b9f6c1b3a092780ec646297224afc9faf5a # v1.26.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
       # https://github.com/dependabot/fetch-metadata
       - name: Dependabot metadata
         id: metadata
