@@ -1,7 +1,0 @@
-{
-  "name": "Golang Testing",
-  "description": "Golang testing workflow",
-  "iconName": "example-icon",
-  "categories": ["Go"],
-  "filePatterns": ["package.json$", "^Dockerfile", ".*\\.md$"]
-}

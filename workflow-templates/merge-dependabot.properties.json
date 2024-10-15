@@ -1,0 +1,6 @@
+{
+  "name": "Auto-merge dependabot",
+  "description": "Auto-merge dependabot PRs",
+  "iconName": "octicon git-merge",
+  "categories": ["dependency-management"]
+}
