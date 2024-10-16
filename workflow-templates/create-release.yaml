@@ -1,0 +1,66 @@
+name: Create new release
+
+on:
+  # Allow for manual triggers
+  workflow_dispatch:
+
+# Sets up concurrency to ensure that only one job or workflow using the same concurrency group will run at a time.
+concurrency:
+  group: "${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  push:
+    name: Bump version and create release
+
+    # Specify the job to run on the latest Ubuntu version
+    runs-on: ubuntu-latest
+
+    # Only run this job if the branch is main
+    if: ${{ github.ref == 'refs/heads/$default-branch' }}
+
+    steps:
+      # https://github.com/actions/create-github-app-token
+      - name: Get Token
+        id: app-token
+        uses: actions/create-github-app-token@31c86eb3b33c9b601a1f60f98dcbfd1d70f379b4 # v1.10.3
+        with:
+          app-id: ${{ secrets.GIT_AUTOMATION_PK }}
+          private-key: ${{ secrets.GIT_AUTOMATION_PK }}
+
+      # https://github.com/actions/checkout
+      - name: Checkout repo
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          fetch-depth: "0"
+          token: ${{ steps.app-token.outputs.token }}
+          ref: ${{ github.head_ref }}
+
+      # https://github.com/anothrNick/github-tag-action
+      - name: Bump version and push tag
+        id: tag
+        uses: anothrNick/github-tag-action@777684df761b882a3f4f70db16ac70d8cc78d0ea # v1.70.0
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          WITH_V: true
+          INITIAL_VERSION: 1.0.0
+          DEFAULT_BUMP: patch
+
+      # https://github.com/actions/github-script
+      - name: Create release
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const { data: release } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: '${{ steps.tag.outputs.new_tag }}',
+              name: '${{ steps.tag.outputs.new_tag }}',
+              draft: false,
+              prerelease: false,
+              generate_release_notes: true
+            });
+
+            console.log(`Release created: ${release.html_url}`);
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}

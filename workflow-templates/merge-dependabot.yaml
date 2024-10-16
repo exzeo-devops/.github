@@ -3,7 +3,8 @@ name: Auto-merge dependabot
 on:
   # Allow trigger on pull request
   pull_request:
-
+    branches: [ $default-branch ]
+    
 # Sets up concurrency to ensure that only one job or workflow using the same concurrency group will run at a time.
 concurrency:
   group: "${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}"
@@ -29,7 +30,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@31c86eb3b33c9b601a1f60f98dcbfd1d70f379b4 # v1.10.3
         with:
-          app-id: "872585"
+          app-id: ${{ secrets.GIT_AUTOMATION_PK }}
           private-key: ${{ secrets.GIT_AUTOMATION_PK }}
 
       # https://github.com/int128/wait-for-workflows-action
@@ -47,54 +48,11 @@ jobs:
           github-token: ${{ steps.app-token.outputs.token }}
 
       # https://github.com/actions/github-script
-      - name: Approve the pull request
+      - name: Approve and merge the Pull Request
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         if: (steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor')
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
-            const pullRequestId = context.payload.pull_request.node_id;
-
-            await github.graphql(`
-              mutation($pullRequestId: ID!) {
-                addPullRequestReview(input: {
-                  pullRequestId: $pullRequestId,
-                  event: APPROVE
-                }) {
-                  pullRequestReview {
-                    id
-                    state
-                  }
-                }
-              }
-            `, {
-              pullRequestId: pullRequestId
-            });
-
-      # https://github.com/actions/github-script
-      - name: Merge the Pull Request
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
-        if: (steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor')
-        with:
-          github-token: ${{ steps.app-token.outputs.token }}
-          script: |
-            const pullRequestId = context.payload.pull_request.node_id;
-
-            await github.graphql(`
-              mutation($pullRequestId: ID!, $mergeMethod: PullRequestMergeMethod!) {
-                mergePullRequest(input: {
-                  pullRequestId: $pullRequestId,
-                  mergeMethod: $mergeMethod
-                }) {
-                  pullRequest {
-                    merged
-                    mergeCommit {
-                      oid
-                    }
-                  }
-                }
-              }
-            `, {
-              pullRequestId: pullRequestId,
-              mergeMethod: 'SQUASH'  // You can also use 'MERGE' or 'REBASE'
-            });          
+            await github.rest.pulls.createReview({ context.repo.owner, context.repo.repo, context.payload.pull_request.number, event: 'APPROVE' });
+            await github.rest.pulls.merge({ context.repo.owner, context.repo.repo, context.payload.pull_request.number, merge_method: 'squash' });
