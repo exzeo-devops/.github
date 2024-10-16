@@ -1,0 +1,108 @@
+name: Ansible CI
+
+on:
+  # Ensure build works in a pull request
+  pull_request:
+    branches: [ $default-branch ]
+
+  # Allow pushes to main to trigger
+  push:
+    branches: [ $default-branch ]
+
+# Sets up concurrency to ensure that only one job or workflow using the same concurrency group will run at a time.
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Check for ansible linting issues
+
+    # Specify the job to run on the latest Ubuntu version
+    runs-on: ubuntu-latest
+
+    steps:
+      # https://github.com/actions/checkout
+      - name: Checkout repo
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+        # https://github.com/actions/setup-python
+      - name: Setup Python
+        uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5.2.0
+
+      # https://github.com/webfactory/ssh-agent
+      - name: Add SSH key
+        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387 # v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          log-public-key: false
+
+      # https://github.com/ansible/ansible-lint
+      - name: Ansible Lint
+        uses: ansible/ansible-lint@3b5bee19c2102ea35bc8619795a72c5c73797fc7 # v24.9.2
+
+      # Check for basic yaml issues
+      - name: Yaml Lint
+        run: |
+          pip3 install yamllint@v1.35.1
+          yamllint .
+
+  test:
+    name: Run ansible molecule testing
+
+    # Specify the job to run on the latest Ubuntu version
+    runs-on: ubuntu-latest
+
+    # Define the matrix strategy
+    # Strategy used in ansible molecule testing to test multiple versions of ansible and OS distributions
+    # Requires molecule.yml to have MOLECULE_IMAGE and MOLECULE_PLAYBOOK defined in the platforms section
+
+    # platforms:
+    #   - name: instance
+    #     image: ghcr.io/exzeo-devops/docker-images/${MOLECULE_IMAGE:-ubuntu-2404-ansible}:latest
+
+    # provisioner:
+    #   name: ansible
+    #   playbooks:
+    #     converge: ${MOLECULE_PLAYBOOK:-converge.yml}
+
+    # Example - uncomment to use
+    # strategy:
+    #   matrix:
+    #     include:
+    #       - image: ubuntu-2404-ansible
+    #         playbook: converge.yml
+
+    steps:
+      # https://github.com/actions/checkout
+      - name: Checkout repo
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+        # https://github.com/actions/setup-python
+      - name: Setup Python
+        uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5.2.0
+
+      # https://github.com/webfactory/ssh-agent
+      - name: Add SSH key
+        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387 # v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          log-public-key: false
+
+      - name: Ensure Pipfile exists
+        run: |
+          if [ ! -f Pipfile ]; then 
+              echo "Pipfile does not exist! This is required in order to install dependencies." >&2
+              exit 1
+          fi
+
+      - name: Install dependencies
+        run: pipenv install --dev
+
+      - name: Run Molecule tests.
+        run: pipenv run molecule test
+        env:
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+          MOLECULE_IMAGE: ${{ matrix.image }}
+          MOLECULE_PLAYBOOK: ${{ matrix.playbook }}
