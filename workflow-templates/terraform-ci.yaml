@@ -1,0 +1,119 @@
+name: Terraform CI
+
+on:
+  # Ensure build works in a pull request
+  pull_request:
+    branches: [ $default-branch ]
+
+  # Allow pushes to main to trigger
+  push:
+    branches: [ $default-branch ]
+
+# Sets up concurrency to ensure that only one job or workflow using the same concurrency group will run at a time.
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
+  cancel-in-progress: true
+
+jobs:
+  security:
+    name: "Runs security checks"
+
+    # Specify the job to run on the latest Ubuntu version
+    runs-on: ubuntu-latest
+
+    steps:
+      # https://github.com/actions/checkout
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      # https://github.com/hashicorp/setup-terraform
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+
+      # https://github.com/actions/create-github-app-token
+      - name: Get Token
+        id: app-token
+        uses: actions/create-github-app-token@31c86eb3b33c9b601a1f60f98dcbfd1d70f379b4 # v1.10.3
+        with:
+          app-id: ${{ secrets.GIT_AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.GIT_AUTOMATION_PK }}
+
+      # https://github.com/aquasecurity/tfsec-action
+      - name: Run terraform security checks using tfsec
+        id: tfsec_check
+        uses: aquasecurity/tfsec-action@b466648d6e39e7c75324f25d83891162a721f2d6 # v1.0.3
+        with:
+          github_token: ${{ steps.app-token.outputs.token }}
+          format: text
+          additional_args: --out tfsec-report.txt --no-color
+
+      # https://github.com/exzeo-devops/read-file-action
+      - name: Read report
+        id: report
+        if: ${{ always() }}
+        uses: exzeo-devops/read-file-action@f321e89094110610fb4f560d647d06f6c3ad0cb7 # v1.0.3
+        with:
+          path: tfsec-report.txt
+
+      # https://github.com/marocchino/sticky-pull-request-comment
+      - name: Create PR Comment
+        uses: marocchino/sticky-pull-request-comment@331f8f5b4215f0445d3c07b4967662a32a2d3e31 # v2.9.0
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        with:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          hide_and_recreate: true
+          hide_classify: "OUTDATED"
+          message: |
+            ## tfsec Security Report
+            ```${{ steps.report.outputs.content }}```
+
+  lint:
+    name: "Runs best practices"
+
+    # Specify the job to run on the latest Ubuntu version
+    runs-on: ubuntu-latest
+
+    steps:
+      # https://github.com/actions/checkout
+      - name: Checkout repo
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      
+      # https://github.com/hashicorp/setup-terraform
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+
+      - name: Check terraform format
+        run: |
+          if [[ -n "$(terraform fmt -check -recursive -diff)" ]]; then
+            echo "Some terraform files need to be formatted. Run 'terraform fmt -recursive' to fix them.";
+            exit 1;
+          fi
+
+  test:
+    name: "Runs unit tests"
+
+    # Specify the job to run on the latest Ubuntu version
+    runs-on: ubuntu-latest
+
+    steps:
+      # https://github.com/actions/checkout
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      # https://github.com/hashicorp/setup-terraform
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+
+      # https://github.com/aws-actions/configure-aws-credentials
+      - name: Assume Role
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          audience: ${{ secrets.AWS_OIDC_AUDIENCE }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ var.AWS_REGION }}
+
+      - name: Initialize Terraform
+        run: terraform init
+
+      - name: Run unit tests
+        run: terraform test

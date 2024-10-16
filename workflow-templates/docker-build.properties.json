@@ -1,0 +1,7 @@
+{
+  "name": "Docker Build",
+  "description": "Docker build workflow",
+  "iconName": "docker",
+  "categories": ["Docker"],
+  "filePatterns": ["Dockerfile"]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "Terraform CI",
+  "description": "Terraform CI workflow",
+  "iconName": "terraform",
+  "categories": ["Terraform"],
+  "filePatterns": ["*.tf"]
+}
