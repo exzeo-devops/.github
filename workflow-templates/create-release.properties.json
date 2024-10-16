@@ -1,0 +1,6 @@
+{
+  "name": "Create new release",
+  "description": "Create a new release workflow",
+  "iconName": "octicon file-symlink-file",
+  "categories": ["dependency-management"]
+}

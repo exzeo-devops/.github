@@ -1,0 +1,7 @@
+{
+  "name": "Golang CI",
+  "description": "Golang CI workflow",
+  "iconName": "go",
+  "categories": ["Go"],
+  "filePatterns": ["go.sum", "go.mod"]
+}
