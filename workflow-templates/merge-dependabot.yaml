@@ -4,7 +4,7 @@ on:
   # Allow trigger on pull request
   pull_request:
     branches: [ $default-branch ]
-    
+
 # Sets up concurrency to ensure that only one job or workflow using the same concurrency group will run at a time.
 concurrency:
   group: "${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}"
@@ -30,13 +30,13 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@31c86eb3b33c9b601a1f60f98dcbfd1d70f379b4 # v1.10.3
         with:
-          app-id: ${{ secrets.GIT_AUTOMATION_PK }}
+          app-id: ${{ secrets.GIT_AUTOMATION_APP_ID }}
           private-key: ${{ secrets.GIT_AUTOMATION_PK }}
 
       # https://github.com/int128/wait-for-workflows-action
       - name: Wait for workflows to finish
-        timeout-minutes: 10
         uses: int128/wait-for-workflows-action@a1d37b9f6c1b3a092780ec646297224afc9faf5a # v1.26.0
+        timeout-minutes: 10
         with:
           token: ${{ steps.app-token.outputs.token }}
 

@@ -1,0 +1,93 @@
+name: Build and Test
+
+on:
+  # Trigger on all pull request events
+  pull_request:
+
+  # Trigger when tag is pushed
+  push:
+    tags:
+      - 'v*'
+
+# Sets up concurrency to ensure that only one job or workflow using the same concurrency group will run at a time.
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
+  cancel-in-progress: true
+
+jobs:
+  push:
+    name: Build and push docker image
+
+    # Specify the job to run on the latest Ubuntu version
+    runs-on: ubuntu-latest
+
+    steps:
+      # https://github.com/actions/checkout
+      - name: Checkout repo
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      # https://github.com/actions/create-github-app-token
+      - name: Get Token
+        id: app-token
+        uses: actions/create-github-app-token@31c86eb3b33c9b601a1f60f98dcbfd1d70f379b4 # v1.10.3
+        with:
+          app-id: ${{ secrets.GIT_AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.GIT_AUTOMATION_PK }}
+
+      # https://github.com/int128/wait-for-workflows-action
+      - name: Wait for workflows to finish
+        uses: int128/wait-for-workflows-action@a1d37b9f6c1b3a092780ec646297224afc9faf5a # v1.26.0
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        timeout-minutes: 10
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      # https://github.com/docker/setup-qemu-action
+      - name: Installs QEMU static binaries
+        uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf # v3.2.0
+
+      # https://github.com/docker/setup-buildx-action
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@988b5a0280414f521da01fcc63a27aeeb4b104db # v3.6.1
+
+      # https://github.com/docker/login-action
+      - name: Log in to the Container registry
+        uses: docker/login-action@0d4c9c5ea7693da7b068278f7b52bda2a190a446 # v3.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ steps.app-token.outputs.token }}
+
+      # https://github.com/docker/metadata-action
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=tag,enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+
+      # https://github.com/webfactory/ssh-agent
+      - name: Add SSH key
+        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387 # v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          log-public-key: false
+
+      - name: Setup SSH access for private repository
+        run: |
+          git config --global url."ssh://git@github.com/".insteadOf https://github.com/   
+
+      # https://github.com/docker/build-push-action
+      - name: Build and push Docker image
+        uses: docker/build-push-action@16ebe778df0e7752d2cfcbd924afdbbd89c1a755 # v6.6.1
+        with:
+          context: "."
+          platforms: "linux/amd64"
+          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
