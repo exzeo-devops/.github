@@ -1,0 +1,7 @@
+{
+  "name": "Ansible CI",
+  "description": "Ansible CI workflow",
+  "iconName": "ansible",
+  "categories": ["Ansible"],
+  "filePatterns": ["molecule/**/*.yml", "Pipfile"]
+}
