@@ -36,6 +36,13 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           ref: ${{ github.head_ref }}
 
+      # https://github.com/int128/wait-for-workflows-action
+      - name: Wait for workflows to finish
+        uses: int128/wait-for-workflows-action@a1d37b9f6c1b3a092780ec646297224afc9faf5a # v1.26.0
+        timeout-minutes: 10
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
       # https://github.com/anothrNick/github-tag-action
       - name: Bump version and push tag
         id: tag
