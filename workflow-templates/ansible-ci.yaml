@@ -29,6 +29,8 @@ jobs:
         # https://github.com/actions/setup-python
       - name: Setup Python
         uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5.2.0
+        with:
+          python-version: '3.x'
 
       # https://github.com/webfactory/ssh-agent
       - name: Add SSH key
@@ -44,34 +46,69 @@ jobs:
       # Check for basic yaml issues
       - name: Yaml Lint
         run: |
-          pip3 install yamllint@v1.35.1
+          pip3 install yamllint
           yamllint .
+
+  setup:
+    name: Setup ansible molecule testing
+
+    # Specify the job to run on the latest Ubuntu version
+    runs-on: ubuntu-latest
+
+    # Define the output for the matrix
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+
+    steps:
+      # https://github.com/actions/checkout
+      - name: Checkout repo
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      # https://github.com/actions/setup-node
+      - name: Set up Node.js
+        uses: actions/setup-node@0a44ba7841725637a19e28fa30b79a866c81b0a6 # v4.0.4
+
+      - name: Install dependencies
+        run: npm install js-yaml
+
+      - name: Read matrix from settings.yaml
+        id: set-matrix
+        run: |
+          node -e "
+          const fs = require('fs');
+          const yaml = require('js-yaml');
+
+          // Read the settings.yaml file
+          const fileContents = fs.readFileSync('.github/settings.yaml', 'utf8');
+          const config = yaml.load(fileContents);
+
+          // Extract the ansible scenarios from the config
+          const matrix = config.ansible.scenarios.map(scenario => ({
+            name: scenario.name,
+            image: scenario.image,
+            playbook: scenario.playbook
+          }));
+
+          console.log(JSON.stringify(matrix));
+
+          // Write the matrix output to GITHUB_OUTPUT file
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'matrix=' + JSON.stringify(matrix));
+          "
 
   test:
     name: Run ansible molecule testing
+
+    # Require the setup job to complete before running this job
+    needs: [ setup ]
 
     # Specify the job to run on the latest Ubuntu version
     runs-on: ubuntu-latest
 
     # Define the matrix strategy
-    # Strategy used in ansible molecule testing to test multiple versions of ansible and OS distributions
-    # Requires molecule.yml to have MOLECULE_IMAGE and MOLECULE_PLAYBOOK defined in the platforms section
-
-    # platforms:
-    #   - name: instance
-    #     image: ghcr.io/exzeo-devops/docker-images/${MOLECULE_IMAGE:-ubuntu-2404-ansible}:latest
-
-    # provisioner:
-    #   name: ansible
-    #   playbooks:
-    #     converge: ${MOLECULE_PLAYBOOK:-converge.yml}
-
-    # Example - uncomment to use
-    # strategy:
-    #   matrix:
-    #     include:
-    #       - image: ubuntu-2404-ansible
-    #         playbook: converge.yml
+    strategy:
+      fail-fast: false
+      matrix: 
+        scenario: ${{ fromJson(needs.setup.outputs.matrix) }}
 
     steps:
       # https://github.com/actions/checkout
@@ -81,6 +118,12 @@ jobs:
         # https://github.com/actions/setup-python
       - name: Setup Python
         uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5.2.0
+        with:
+          python-version: '3.x'
+
+      # Installs Pipenv
+      - name: Install pipenv
+        run: pip3 install pipenv
 
       # https://github.com/webfactory/ssh-agent
       - name: Add SSH key
@@ -100,9 +143,9 @@ jobs:
         run: pipenv install --dev
 
       - name: Run Molecule tests.
-        run: pipenv run molecule test
+        run: pipenv run molecule test --scenario-name ${{ matrix.scenario.name }}
         env:
           PY_COLORS: '1'
           ANSIBLE_FORCE_COLOR: '1'
-          MOLECULE_IMAGE: ${{ matrix.image }}
-          MOLECULE_PLAYBOOK: ${{ matrix.playbook }}
+          MOLECULE_IMAGE: ${{ matrix.scenario.image }}
+          MOLECULE_PLAYBOOK: ${{ matrix.scenario.playbook }}
