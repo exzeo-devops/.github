@@ -1,0 +1,156 @@
+name: Deploy Serverless via S3
+
+on:
+  # Allow for manual triggers
+  workflow_dispatch:
+
+  # Trigger when tag is pushed
+  push:
+    tags:
+      - 'v*'
+
+# Sets up concurrency to ensure that only one job or workflow using the same concurrency group will run at a time.
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
+  cancel-in-progress: true
+
+jobs:
+  setup:
+    name: Setup deployment matrix
+
+    # Specify the job to run on the latest Ubuntu version
+    runs-on: ubuntu-latest
+
+    # Define the output for the matrix
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+
+    steps:
+      # https://github.com/actions/checkout
+      - name: Checkout repo
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      # https://github.com/actions/setup-node
+      - name: Set up Node.js
+        uses: actions/setup-node@0a44ba7841725637a19e28fa30b79a866c81b0a6 # v4.0.4
+
+      - name: Install dependencies
+        run: npm install js-yaml
+
+      - name: Read matrix from settings.yaml
+        id: set-matrix
+        run: |
+          node -e "
+          const fs = require('fs');
+          const yaml = require('js-yaml');
+
+          // Read the settings.yaml file
+          const fileContents = fs.readFileSync('.github/settings.yaml', 'utf8');
+          const config = yaml.load(fileContents);
+
+          // Extract the config
+          const matrix = config.serverless.environments;
+
+          // Write the matrix output to GITHUB_OUTPUT file
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'matrix=' + JSON.stringify(matrix));
+          "    
+
+  upload:
+    name: "Build and Upload to S3: ${{ matrix.environment }}"
+
+    # Require the setup job to complete before running this job
+    needs: [ setup ]
+
+    # Connects to environment based on matrix value
+    environment: "${{ matrix.environment.name }}"
+
+    # Specify the job to run on the latest Ubuntu version
+    runs-on: ubuntu-latest
+
+    # Define the matrix strategy
+    strategy:
+      matrix:
+        environment: ${{ fromJson(needs.setup.outputs.matrix) }}
+
+    steps:
+      # https://github.com/actions/checkout
+      - name: Checkout repository
+        uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
+
+      # https://github.com/actions/create-github-app-token
+      - name: Get Token
+        id: app-token
+        uses: actions/create-github-app-token@31c86eb3b33c9b601a1f60f98dcbfd1d70f379b4 # v1.10.3
+        with:
+          app-id: ${{ secrets.GIT_AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.GIT_AUTOMATION_PK }}
+
+      # https://github.com/int128/wait-for-workflows-action
+      - name: Wait for workflows to finish
+        uses: int128/wait-for-workflows-action@a1d37b9f6c1b3a092780ec646297224afc9faf5a # v1.26.0
+        timeout-minutes: 10
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      # https://github.com/aws-actions/configure-aws-credentials
+      - name: Assume Role
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          audience: ${{ secrets.AWS_OIDC_AUDIENCE }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ matrix.environment.region }}
+
+      # Checks if the AWS S3 bucket for serverless-apps exists
+      - name: Check if S3 exists
+        shell: bash
+        id: s3
+        env:
+          BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+        run: |
+          if aws s3api head-bucket --bucket "${BUCKET_NAME}" 2>&1; then
+            echo "Bucket exists"
+            echo "bucket=${BUCKET_NAME}" >> $GITHUB_OUTPUT
+          else
+            echo "Bucket (${BUCKET_NAME}) does not exist or you don't have permission to access it"
+            exit 1
+          fi
+
+      # Runs the make package command to create zipped executable
+      - name: Package code
+        run: |
+          if [ -f Makefile ]; then
+            if make -n package >/dev/null 2>&1; then
+              make package
+            else
+              echo "Package target not found in Makefile"
+              exit 1
+            fi
+          else
+            echo "Makefile not found"
+            exit 1
+          fi
+
+      # Check for the existence of the package that should have been created from make package
+      - name: Check for package
+        run: |
+          if [ ! -f ${{ github.event.repository.name }}.zip ]; then
+            echo "No package found"
+            exit 1
+          fi
+
+      # Uploads archived file to serverless S3 bucket
+      - name: Upload to S3
+        run: |
+          aws s3 cp ${{ github.event.repository.name }}.zip s3://${{steps.s3.outputs.bucket}}/serverless/${{ github.event.repository.name }}/${{ github.event.repository.name }}.zip
+
+      # Allows lambda to updated with new code
+      - name: Update lambda
+        run: |
+          if aws lambda get-function --function-name ${{ github.event.repository.name }} --no-cli-pager
+          then
+            echo "Updating lambda function"
+            aws lambda update-function-code --function-name ${{ github.event.repository.name }} --s3-bucket ${{steps.s3.outputs.bucket}} --s3-key serverless/${{ github.event.repository.name }}/${{ github.event.repository.name }}.zip
+          else
+            echo "Unable to locate lambda function: ${{ github.event.repository.name }}"
+            exit 1
+          fi 
