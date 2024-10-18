@@ -15,3 +15,11 @@ To update an existing workflow template in your repository, navigate to the Acti
 ## Documentation
 
 The documentation for each workflow template can be found in the [docs folder](./docs). This folder contains detailed explanations and usage guidelines for each workflow template. This folder contains detailed explanations and usage guidelines for each workflow template.
+
+## Available Variables in Workflows
+
+- `$default-branch` Substitutes the default branch from the repository
+- `$protected-branches` Substitutes any protected branches from the repository.
+- `$cron-daily`: Random time within the day.
+- `$cron-weekly`: Random time within the week.
+- `$cron-monthly`: Random time within the month.
