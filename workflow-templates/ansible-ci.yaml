@@ -82,14 +82,8 @@ jobs:
           const fileContents = fs.readFileSync('.github/settings.yaml', 'utf8');
           const config = yaml.load(fileContents);
 
-          // Extract the ansible scenarios from the config
-          const matrix = config.ansible.scenarios.map(scenario => ({
-            name: scenario.name,
-            image: scenario.image,
-            playbook: scenario.playbook
-          }));
-
-          console.log(JSON.stringify(matrix));
+          // Extract the config
+          const matrix = config.ansible.scenarios;
 
           // Write the matrix output to GITHUB_OUTPUT file
           fs.appendFileSync(process.env.GITHUB_OUTPUT, 'matrix=' + JSON.stringify(matrix));
