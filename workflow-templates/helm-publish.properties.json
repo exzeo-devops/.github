@@ -1,0 +1,7 @@
+{
+    "name": "Helm Publish",
+    "description": "Publish helm charts",
+    "iconName": "octicon git-merge",
+    "categories": ["dependency-management"]
+  }
+  

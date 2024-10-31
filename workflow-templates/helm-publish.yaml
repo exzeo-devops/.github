@@ -1,0 +1,217 @@
+name: Helm Publish
+
+on:
+  # Ensure build works in a pull request
+  pull_request:
+    branches: [ $default-branch ]
+
+  # Allow pushes to main to trigger
+  push:
+    branches: [ $default-branch ]
+
+# Sets up concurrency to ensure that only one job or workflow using the same concurrency group will run at a time.
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
+  cancel-in-progress: true    
+
+jobs:
+  get-chart:
+    name: Get Chart Information
+
+    # Specify the job to run on the latest Ubuntu version
+    runs-on: ubuntu-latest
+
+    # Set read-only permissions for repository contents
+    permissions:
+      contents: read
+
+    outputs:
+      has_changes: ${{ steps.get-chart.outputs.has_changes }}
+      charts: ${{ steps.get-chart.outputs.charts }}
+
+    steps:
+      # https://github.com/actions/checkout
+      - name: Checkout repo
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          fetch-depth: 0
+
+      - id: get-chart
+        name: 'Get modified charts'
+        run: |
+        
+          files_changed=$(git diff --name-only --diff-filter=d HEAD^..HEAD)
+
+          # Check if changes is empty
+          if [ -z "$files_changed" ]; then
+            echo "No changes detected."
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "charts=[]" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Files to ignore
+          ignore_pattern='\.md($|\.)|\.gotmpl($|\.)|unittests'
+
+          # Adding || true to avoid "Process exited with code 1" errors
+          charts_dirs_changed=$(echo "$files_changed" | grep -vE $ignore_pattern | grep "^charts/" | cut -d'/' -f2 | sort | uniq | jq -R -s -c 'split("\n")[:-1]')
+          echo "charts_dirs_changed: ${charts_dirs_changed}"
+
+          # Check if no chart changes
+          if [[ $(echo "$charts_dirs_changed" | jq 'length') -eq 0 ]]; then
+            echo "No changes in chart detected."
+            echo "charts=[]" >> $GITHUB_OUTPUT
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          for chart in $(echo "$charts_dirs_changed" | jq -r '.[]'); do
+            num_version_bumps="$(git log -p -- *${chart}/Chart.yaml* | grep -c '^+version' || true)"
+            echo "Detected ${num_version_bumps} version bumps"
+            if [[ "$num_version_bumps" -eq 0 ]]; then
+              # Changes done in charts but version not bumped -> ERROR
+              echo "error=Detected changes in charts without version bump in Chart.yaml. Chart: ${chart}. Version bumps detected: ${num_version_bumps}" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          done
+
+          # Create outputs
+          echo "has_changes=true"  >> $GITHUB_OUTPUT
+          echo "charts=${charts_dirs_changed}" >> $GITHUB_OUTPUT
+
+      - run: |
+          # Debug
+          echo "has_changes=${{ steps.get-chart.outputs.has_changes }}"
+          echo "charts=${{ steps.get-chart.outputs.charts }}"
+
+      - id: show-error
+        name: 'Show error'
+        if: ${{ steps.get-chart.outputs.error }}
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+              core.setFailed('${{ steps.get-chart.outputs.error }}')  
+
+  test:
+    name: Run Testing - ${{ matrix.chart }}
+    needs: [get-chart]
+    if: ${{ needs.get-chart.outputs.charts != '[]' && needs.get-chart.outputs.has_changes }}
+
+    # Specify the job to run on the latest Ubuntu version
+    runs-on: ubuntu-latest
+
+    # Set read-only permissions for repository contents and packages
+    permissions:
+      contents: read
+      packages: read
+
+    strategy:
+      matrix: 
+        chart: "${{ fromJSON(needs.get-chart.outputs.charts) }}"
+
+    steps:
+      # https://github.com/actions/create-github-app-token
+      - name: Get Token
+        id: app-token
+        uses: actions/create-github-app-token@31c86eb3b33c9b601a1f60f98dcbfd1d70f379b4 # v1.10.3
+        with:
+          app-id: ${{ secrets.GIT_AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.GIT_AUTOMATION_PK }}
+
+      # https://github.com/actions/checkout
+      - name: Checkout repo
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          fetch-depth: 0
+        
+      # https://github.com/azure/setup-helm
+      - name: Install Helm
+        uses: azure/setup-helm@fe7b79cd5ee1e45176fcad797de68ecaf3ca4814 # v4.2.0
+
+      # https://github.com/docker/login-action
+      - name: Login to GHCR
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ steps.app-token.outputs.token }}
+
+      - name: Setup helm unit tests
+        run : |
+          helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.4.4
+
+      - name: Helm unit tests
+        run: |
+          # Check if make exists and test target exists
+          if [ -f "charts/${{ matrix.chart }}/Makefile" ] && grep -q -E '^test:' "charts/${{ matrix.chart }}/Makefile"; then
+            make -C charts/${{ matrix.chart }} test;
+          else
+            helm unittest --strict -f 'unittests/*.yaml' -f 'tests/*.yaml' charts/${{ matrix.chart }};
+          fi
+
+  release:
+    name: Create Chart Release
+    needs: [test, get-chart]
+    if: ${{ needs.get-chart.outputs.has_changes && github.ref == 'refs/heads/main' }}
+
+    # Specify the job to run on the latest Ubuntu version
+    runs-on: ubuntu-latest
+
+    # Set write permissions for repository contents and packages
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      # https://github.com/actions/create-github-app-token
+      - name: Get Token
+        id: app-token
+        uses: actions/create-github-app-token@31c86eb3b33c9b601a1f60f98dcbfd1d70f379b4 # v1.10.3
+        with:
+          app-id: ${{ secrets.GIT_AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.GIT_AUTOMATION_PK }}
+
+      # https://github.com/actions/checkout
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}        
+
+      # Setup git config
+      - name: Configure Git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+      # https://github.com/azure/setup-helm
+      - name: Install Helm
+        uses: azure/setup-helm@fe7b79cd5ee1e45176fcad797de68ecaf3ca4814 # v4.2.0
+
+      # https://github.com/docker/login-action
+      - name: Login to GHCR
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ steps.app-token.outputs.token }}
+
+      # https://github.com/helm/chart-releaser-action
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@a917fd15b20e8b64b94d9158ad54cd6345335584 # v1.6.0
+        with:
+          skip_existing: true
+          skip_upload: true
+        env:
+          CR_TOKEN: "${{ steps.app-token.outputs.token }}"
+
+      # Push all packages in .cr-release-packages to github container registry
+      - name: Push chart to GHCR
+        run: |
+          shopt -s nullglob
+          for pkg in .cr-release-packages/*.tgz; do
+            if [ -z "${pkg:-}" ]; then
+              break
+            fi
+            helm push "${pkg}" oci://ghcr.io/${{ github.repository }}
+          done      
