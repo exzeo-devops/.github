@@ -1,6 +1,6 @@
 {
-  "name": "Helm Publish",
-  "description": "Publish helm charts",
+  "name": "Helm CI",
+  "description": "Run CI with helm charts",
   "iconName": "octicon git-merge",
   "categories": ["dependency-management"]
 }
