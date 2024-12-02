@@ -3,6 +3,6 @@
   "description": "NodeJS CI workflow",
   "iconName": "node",
   "categories": ["NodeJS"],
-  "filePatterns": ["package.json", "package-lock.json"]
+  "filePatterns": ["package.json"]
 }
   
