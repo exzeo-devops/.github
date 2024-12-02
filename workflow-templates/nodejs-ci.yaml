@@ -1,0 +1,90 @@
+name: NodeJS CI
+
+on:
+  # Ensure build works in a pull request
+  pull_request:
+    branches: [ $default-branch ]
+
+  # Allow pushes to main to trigger
+  push:
+    branches: [ $default-branch ]
+
+# Sets up concurrency to ensure that only one job or workflow using the same concurrency group will run at a time.
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
+  cancel-in-progress: true
+
+jobs:
+  node-security:
+    name: "NPM Audit"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: lts/*
+
+      - name: Run NPM Audit
+        uses: oke-py/npm-audit-action@2c6b2da234031fbf72af81a04c76b3a152bb2222 # v2.4.4
+        with:
+          audit_level: "moderate"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          create_issues: false
+          create_pr_comments: true
+
+  codeql:
+    name: Scan code using codeql
+
+    # Specify the job to run on the latest Ubuntu version
+    runs-on: ubuntu-latest
+
+    steps:
+      # https://github.com/actions/checkout
+      - name: Checkout repo
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      # https://github.com/actions/create-github-app-token
+      - name: Get Token
+        id: app-token
+        uses: actions/create-github-app-token@31c86eb3b33c9b601a1f60f98dcbfd1d70f379b4 # v1.10.3
+        with:
+          app-id: ${{ secrets.GIT_AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.GIT_AUTOMATION_PK }}
+
+      # https://github.com/github/codeql-action
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@e1f83c153a6cb7134f035e16e2626b216e7168c9 # v3.26.6
+        with:
+          languages: javascript
+          token: ${{ steps.app-token.outputs.token }}
+
+      # https://github.com/github/codeql-action
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@e1f83c153a6cb7134f035e16e2626b216e7168c9 # v3.26.6
+
+  node-tests:
+    name: "Runs unit tests"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: lts/*
+      
+      - name: Run Tests
+        run: |
+          if make -n test >/dev/null 2>&1; then
+            make test
+          else
+            npm test
+          fi
