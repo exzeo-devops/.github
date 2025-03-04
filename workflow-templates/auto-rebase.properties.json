@@ -1,6 +1,0 @@
-{
-  "name": "Auto-rebase",
-  "description": "Automatically rebase code",
-  "iconName": "octicon file-code",
-  "categories": ["Automation"]
-}

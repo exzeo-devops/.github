@@ -1,0 +1,6 @@
+{
+  "name": "Create new tag",
+  "description": "Create a new tag workflow",
+  "iconName": "octicon file-symlink-file",
+  "categories": ["dependency-management"]
+}

@@ -3,7 +3,6 @@ name: Auto-merge dependabot
 on:
   # Allow trigger on pull request
   pull_request:
-    branches: [ $default-branch ]
 
 # Sets up concurrency to ensure that only one job or workflow using the same concurrency group will run at a time.
 concurrency:
@@ -13,46 +12,6 @@ concurrency:
 jobs:
   dependabot:
     name: Auto-merge dependabot
-
-    # Specify the job to run on the latest Ubuntu version
-    runs-on: ubuntu-latest
-
-    # Only run this job if the actor is dependabot
     if: github.actor == 'dependabot[bot]'
-
-    steps:
-      # https://github.com/actions/checkout
-      - name: Checkout repository
-        uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
-
-      # https://github.com/actions/create-github-app-token
-      - name: Get Token
-        id: app-token
-        uses: actions/create-github-app-token@31c86eb3b33c9b601a1f60f98dcbfd1d70f379b4 # v1.10.3
-        with:
-          app-id: ${{ secrets.GIT_AUTOMATION_APP_ID }}
-          private-key: ${{ secrets.GIT_AUTOMATION_PK }}
-
-      # https://github.com/int128/wait-for-workflows-action
-      - name: Wait for workflows to finish
-        uses: int128/wait-for-workflows-action@a1d37b9f6c1b3a092780ec646297224afc9faf5a # v1.26.0
-        timeout-minutes: 10
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-
-      # https://github.com/dependabot/fetch-metadata
-      - name: Dependabot metadata
-        id: metadata
-        uses: dependabot/fetch-metadata@dbb049abf0d677abbd7f7eee0375145b417fdd34 # v2.2.0
-        with:
-          github-token: ${{ steps.app-token.outputs.token }}
-
-      # https://github.com/actions/github-script
-      - name: Approve and merge the Pull Request
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
-        if: (steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor')
-        with:
-          github-token: ${{ steps.app-token.outputs.token }}
-          script: |
-            await github.rest.pulls.createReview({ context.repo.owner, context.repo.repo, context.payload.pull_request.number, event: 'APPROVE' });
-            await github.rest.pulls.merge({ context.repo.owner, context.repo.repo, context.payload.pull_request.number, merge_method: 'squash' });
+    uses: exzeo-devops/action-workflows/.github/workflows/merge-dependabot.yaml@743a2bae5dac57cb68d82030ddec14a32481115f # v1.0.0
+    secrets: inherit

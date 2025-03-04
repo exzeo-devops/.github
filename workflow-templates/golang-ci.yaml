@@ -3,11 +3,11 @@ name: Golang CI
 on:
   # Ensure build works in a pull request
   pull_request:
-    branches: [ $default-branch ]
 
   # Allow pushes to main to trigger
   push:
-    branches: [ $default-branch ]
+    branches:
+      - $default-branch
 
 # Sets up concurrency to ensure that only one job or workflow using the same concurrency group will run at a time.
 concurrency:
@@ -15,146 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
-    name: "Run golang linting"
-
-    # Specify the job to run on the latest Ubuntu version
-    runs-on: ubuntu-latest
-
-    steps:
-      # https://github.com/actions/checkout
-      - name: Checkout repo
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-
-      # https://github.com/actions/setup-go
-      - uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
-        with:
-          go-version-file: go.mod
-
-      - name: Check go.mod and go.sum tidiness
-        run: |
-          go mod tidy
-          if [ ! -z "$(git status --porcelain go.mod go.sum)" ]; then
-            echo "Need to run 'go mod tidy'";
-            exit 1;
-          fi
-
-  tests:
-    name: "Run golang unit tests"
-
-    # Specify the job to run on the latest Ubuntu version
-    runs-on: ubuntu-latest
-
-    steps:
-      # https://github.com/actions/checkout
-      - name: Checkout repo
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-
-      # https://github.com/actions/setup-go
-      - uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
-        with:
-          go-version-file: go.mod
-
-      # https://github.com/webfactory/ssh-agent
-      - name: Add SSH key
-        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387 # v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          log-public-key: false
-
-      - name: Setup SSH access for private repository
-        run: |
-          git config --global url."ssh://git@github.com/".insteadOf https://github.com/  
-
-      - name: Install dependencies
-        run: go get .          
-
-      - name: Run unit tests
-        run: go test -json > testresults.json
-
-      # https://github.com/actions/upload-artifact
-      - name: Upload Go test results
-        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
-        with:
-          name: testresults
-          path: testresults.json
-
-  codeql:
-    name: Scan code using codeql
-
-    # Specify the job to run on the latest Ubuntu version
-    runs-on: ubuntu-latest
-
-    steps:
-      # https://github.com/actions/checkout
-      - name: Checkout repo
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-
-      # https://github.com/actions/create-github-app-token
-      - name: Get Token
-        id: app-token
-        uses: actions/create-github-app-token@31c86eb3b33c9b601a1f60f98dcbfd1d70f379b4 # v1.10.3
-        with:
-          app-id: ${{ secrets.GIT_AUTOMATION_APP_ID }}
-          private-key: ${{ secrets.GIT_AUTOMATION_PK }}
-
-      # https://github.com/github/codeql-action
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@e1f83c153a6cb7134f035e16e2626b216e7168c9 # v3.26.6
-        with:
-          languages: go
-          token: ${{ steps.app-token.outputs.token }}
-
-      # https://github.com/github/codeql-action
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@e1f83c153a6cb7134f035e16e2626b216e7168c9 # v3.26.6
-
-  security:
-    name: Scan code using golang security tools
-
-    # Specify the job to run on the latest Ubuntu version
-    runs-on: ubuntu-latest
-
-    steps:
-      # https://github.com/actions/checkout
-      - name: Checkout repo
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-
-      # https://github.com/actions/create-github-app-token
-      - name: Get Token
-        id: app-token
-        uses: actions/create-github-app-token@31c86eb3b33c9b601a1f60f98dcbfd1d70f379b4 # v1.10.3
-        with:
-          app-id: ${{ secrets.GIT_AUTOMATION_APP_ID }}
-          private-key: ${{ secrets.GIT_AUTOMATION_PK }}
-
-      # https://github.com/actions/setup-go
-      - uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
-        with:
-          go-version-file: go.mod
-
-      # https://github.com/gitleaks/gitleaks
-      - name: Run gitleaks (Scan for hard-coded secrets in git repository)
-        run: |
-          go install github.com/zricethezav/gitleaks/v8@aabe3815394d24d5b8198ba6068a99e0ba7601b1 # v8.21.0
-          gitleaks detect --verbose --source . --report-format sarif --report-path gitleaks.sarif
-      
-      # https://github.com/securego/gosec
-      - name: Run GoSec (Golang code issues)
-        run: |
-          go install github.com/securego/gosec/v2/cmd/gosec@d4617f51baf75f4f809066386a4f9d27b3ac3e46 # v2.21.4
-          gosec -stdout -fmt sarif -out gosec.sarif ./...
-
-      # https://github.com/golang/vuln
-      - name: Run govulncheck (Golang CLI issues)
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@4ea4418106cea3bb2c9aa098527c924e9e1fbbb4 # v1.1.3
-          govulncheck ./...
-
-      # https://github.com/github/codeql-action
-      - name: Upload security reports
-        uses: github/codeql-action/upload-sarif@e1f83c153a6cb7134f035e16e2626b216e7168c9 # v3.26.6
-        if: always()
-        with:
-          sarif_file: '.'
-          token: ${{ steps.app-token.outputs.token }}
+  ci:
+    name: "Run golang ci"
+    uses: exzeo-devops/action-workflows/.github/workflows/golang-ci.yaml@743a2bae5dac57cb68d82030ddec14a32481115f # v1.0.0
+    secrets: inherit

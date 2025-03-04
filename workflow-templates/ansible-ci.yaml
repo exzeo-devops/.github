@@ -1,145 +1,48 @@
 name: Ansible CI
 
-on:
-  # Ensure build works in a pull request
+on: 
   pull_request:
-    branches: [ $default-branch ]
 
-  # Allow pushes to main to trigger
   push:
-    branches: [ $default-branch ]
+    branches:
+      - $default-branch
 
-# Sets up concurrency to ensure that only one job or workflow using the same concurrency group will run at a time.
+# Prevents concurrent runs of the same workflow
 concurrency:
   group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
   cancel-in-progress: true
 
 jobs:
   lint:
-    name: Check for ansible linting issues
-
-    # Specify the job to run on the latest Ubuntu version
-    runs-on: ubuntu-latest
-
-    steps:
-      # https://github.com/actions/checkout
-      - name: Checkout repo
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-
-        # https://github.com/actions/setup-python
-      - name: Setup Python
-        uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5.2.0
-        with:
-          python-version: '3.x'
-
-      # https://github.com/webfactory/ssh-agent
-      - name: Add SSH key
-        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387 # v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          log-public-key: false
-
-      # https://github.com/ansible/ansible-lint
-      - name: Ansible Lint
-        uses: ansible/ansible-lint@3b5bee19c2102ea35bc8619795a72c5c73797fc7 # v24.9.2
-
-      # Check for basic yaml issues
-      - name: Yaml Lint
-        run: |
-          pip3 install yamllint
-          yamllint .
-
-  setup:
-    name: Setup ansible molecule testing
-
-    # Specify the job to run on the latest Ubuntu version
-    runs-on: ubuntu-latest
-
-    # Define the output for the matrix
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-
-    steps:
-      # https://github.com/actions/checkout
-      - name: Checkout repo
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-
-      # https://github.com/actions/setup-node
-      - name: Set up Node.js
-        uses: actions/setup-node@0a44ba7841725637a19e28fa30b79a866c81b0a6 # v4.0.4
-
-      - name: Install dependencies
-        run: npm install js-yaml
-
-      - name: Read matrix from settings.yaml
-        id: set-matrix
-        run: |
-          node -e "
-          const fs = require('fs');
-          const yaml = require('js-yaml');
-
-          // Read the settings.yaml file
-          const fileContents = fs.readFileSync('.github/settings.yaml', 'utf8');
-          const config = yaml.load(fileContents);
-
-          // Extract the config
-          const matrix = config.ansible.scenarios;
-
-          // Write the matrix output to GITHUB_OUTPUT file
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'matrix=' + JSON.stringify(matrix));
-          "
+    name: Run ansible lint
+    uses: exzeo-devops/action-workflows/.github/workflows/ansible-lint.yaml@743a2bae5dac57cb68d82030ddec14a32481115f # v1.0.0
+    secrets: inherit
 
   test:
-    name: Run ansible molecule testing
+    name: Run ansible CI
 
-    # Require the setup job to complete before running this job
-    needs: [ setup ]
+    # Needs to run after the lint job
+    needs: [lint]
 
-    # Specify the job to run on the latest Ubuntu version
-    runs-on: ubuntu-latest
-
-    # Define the matrix strategy
+    # Example of a matrix
     strategy:
-      fail-fast: false
-      matrix: 
-        scenario: ${{ fromJson(needs.setup.outputs.matrix) }}
+      matrix:
+        include:
+          - scenario: default
+            image: ubuntu-2404-ansible
+          - scenario: default
+            image: ubuntu-2204-ansible
+          - scenario: default
+            image: ubuntu-2004-ansible
+          - scenario: specific-version
+            image: ubuntu-2404-ansible
+          - scenario: specific-version
+            image: ubuntu-2204-ansible
+          - scenario: specific-version
+            image: ubuntu-2004-ansible
 
-    steps:
-      # https://github.com/actions/checkout
-      - name: Checkout repo
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-
-        # https://github.com/actions/setup-python
-      - name: Setup Python
-        uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5.2.0
-        with:
-          python-version: '3.x'
-
-      # Installs Pipenv
-      - name: Install pipenv
-        run: pip3 install pipenv
-
-      # https://github.com/webfactory/ssh-agent
-      - name: Add SSH key
-        uses: webfactory/ssh-agent@dc588b651fe13675774614f8e6a936a468676387 # v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-          log-public-key: false
-
-      - name: Ensure Pipfile exists
-        run: |
-          if [ ! -f Pipfile ]; then 
-              echo "Pipfile does not exist! This is required in order to install dependencies." >&2
-              exit 1
-          fi
-
-      - name: Install dependencies
-        run: pipenv install --dev
-
-      - name: Run Molecule tests.
-        run: pipenv run molecule test --scenario-name ${{ matrix.scenario.name }}
-        env:
-          PY_COLORS: '1'
-          ANSIBLE_FORCE_COLOR: '1'
-          MOLECULE_IMAGE: ${{ matrix.scenario.image }}
-          MOLECULE_PLAYBOOK: ${{ matrix.scenario.playbook }}
+    uses: exzeo-devops/action-workflows/.github/workflows/ansible-test.yaml@743a2bae5dac57cb68d82030ddec14a32481115f # v1.0.0
+    secrets: inherit
+    with:
+      scenario: ${{ matrix.scenario }}
+      image: ${{ matrix.image }}
