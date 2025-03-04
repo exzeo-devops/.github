@@ -1,6 +1,0 @@
-{
-  "name": "Serverless deploy to s3",
-  "description": "Deploy serverless app to s3",
-  "iconName": "aws",
-  "categories": ["deployment"]
-}
