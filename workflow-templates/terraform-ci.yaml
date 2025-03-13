@@ -6,7 +6,7 @@ on:
   # Allow pushes to main to trigger
   push:
     branches:
-      - $default-branch
+      - main
 
 # Sets up concurrency to ensure that only one job or workflow using the same concurrency group will run at a time.
 concurrency:

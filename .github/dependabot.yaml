@@ -7,3 +7,9 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+
+  # Maintain dependencies for Workflow Templates
+  - package-ecosystem: "github-actions"
+    directory: "/workflow-templates"
+    schedule:
+      interval: "daily"
