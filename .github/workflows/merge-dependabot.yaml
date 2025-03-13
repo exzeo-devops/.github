@@ -1,12 +1,8 @@
-name: Terraform CI
+name: Auto-merge dependabot
 
 on:
+  # Allow trigger on pull request
   pull_request:
-
-  # Allow pushes to main to trigger
-  push:
-    branches:
-      - main
 
 # Sets up concurrency to ensure that only one job or workflow using the same concurrency group will run at a time.
 concurrency:
@@ -14,7 +10,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  terraform-ci:
-    name: Terraform CI
-    uses: exzeo-devops/action-workflows/.github/workflows/terraform-ci.yaml@743a2bae5dac57cb68d82030ddec14a32481115f # v1.0.0
+  dependabot:
+    name: Auto-merge dependabot
+    if: github.actor == 'dependabot[bot]'
+    uses: exzeo-devops/action-workflows/.github/workflows/merge-dependabot.yaml@ed38ca716c82f1c030ce20f2d5622c6b2b1e35b7 # v1.0.2
     secrets: inherit

@@ -5,7 +5,7 @@ on:
 
   push:
     branches:
-      - $default-branch
+      - main
 
 # Prevents concurrent runs of the same workflow
 concurrency:
