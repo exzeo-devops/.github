@@ -22,5 +22,5 @@ jobs:
     # Only run the job on the default branch
     if: ${{ github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch' }}
 
-    uses: exzeo-devops/action-workflows/.github/workflows/helm-publish.yaml@743a2bae5dac57cb68d82030ddec14a32481115f # v1.0.0
+    uses: exzeo-devops/action-workflows/.github/workflows/helm-publish.yaml@ed38ca716c82f1c030ce20f2d5622c6b2b1e35b7 # v1.0.2
     secrets: inherit
