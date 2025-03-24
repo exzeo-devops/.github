@@ -14,5 +14,5 @@ concurrency:
 jobs:
   helm:
     name: "Run helm ci"
-    uses: exzeo-devops/action-workflows/.github/workflows/helm-ci.yaml@743a2bae5dac57cb68d82030ddec14a32481115f # v1.0.0
+    uses: exzeo-devops/action-workflows/.github/workflows/helm-ci.yaml@ed38ca716c82f1c030ce20f2d5622c6b2b1e35b7 # v1.0.2
     secrets: inherit
