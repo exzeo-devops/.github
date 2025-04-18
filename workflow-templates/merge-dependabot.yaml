@@ -13,5 +13,5 @@ jobs:
   dependabot:
     name: Auto-merge dependabot
     if: github.actor == 'dependabot[bot]'
-    uses: exzeo-devops/action-workflows/.github/workflows/merge-dependabot.yaml@ed38ca716c82f1c030ce20f2d5622c6b2b1e35b7 # v1.0.2
+    uses: exzeo-devops/action-workflows/.github/workflows/merge-dependabot.yaml@fc470cd62a87df6c2a8ce2189e0d9656551dd9a0 # v1.0.3
     secrets: inherit
