@@ -17,5 +17,5 @@ concurrency:
 jobs:
   ci:
     name: "Run golang ci"
-    uses: exzeo-devops/action-workflows/.github/workflows/golang-ci.yaml@fc470cd62a87df6c2a8ce2189e0d9656551dd9a0 # v1.0.3
+    uses: exzeo-devops/action-workflows/.github/workflows/golang-ci.yaml@77f09e3768eb6207d8c6cba1ea14b1186ce9b944 # v1.0.4
     secrets: inherit
