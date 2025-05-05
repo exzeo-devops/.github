@@ -30,7 +30,7 @@ jobs:
           node-version: lts/*
 
       - name: Run NPM Audit
-        uses: oke-py/npm-audit-action@2c6b2da234031fbf72af81a04c76b3a152bb2222 # v2.4.4
+        uses: oke-py/npm-audit-action@6ec7878c81d7dfe2b3295a63e1a608e9c952f46a # v3.0.0
         with:
           audit_level: "moderate"
           github_token: ${{ secrets.GITHUB_TOKEN }}
