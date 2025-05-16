@@ -1,0 +1,6 @@
+{
+  "name": "Create new draft release",
+  "description": "Create a new draft release workflow",
+  "iconName": "octicon file-symlink-file",
+  "categories": ["dependency-management", "release"]
+}
