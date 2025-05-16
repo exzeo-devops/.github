@@ -1,0 +1,97 @@
+# Configuration for Release Drafter: https://github.com/release-drafter/release-drafter?tab=readme-ov-file#configuration
+---
+name-template: v$RESOLVED_VERSION
+tag-template: v$RESOLVED_VERSION
+version-template: $MAJOR.$MINOR.$PATCH
+
+# Emoji reference: https://gitmoji.carloscuesta.me/
+categories:
+  - title: 💥 Breaking Changes
+    labels:
+      - breaking
+  - title: 🚨 Removed
+    labels:
+      - removed
+  - title: ✨ Major Features and Improvements
+    labels:
+      - major-enhancement
+      - major-feature
+  - title: 🐛 Major Bug Fixes
+    labels:
+      - major-bug
+      - major-fix
+      - major-bugfix
+  - title: ⚠️ Deprecated
+    labels:
+      - deprecated
+  - title: 🚀 New Features and Improvements
+    labels:
+      - enhancement
+      - feature
+  - title: 🐛 Bug Fixes
+    labels:
+      - bug
+      - fix
+      - bugfix
+  - title: 💬 Documentation Updates
+    labels:
+      - documentation
+      - docs
+  - title: 🧰 Maintenance
+    labels:
+      - chore
+      - internal
+      - maintenance
+  - title: 🔐 Security Updates
+    labels:
+      - security
+  - title: 🚦 Tests
+    labels:
+      - test
+      - tests
+  - title: 🧑‍💻 Miscellaneous
+  - title: 📦 Dependency Updates
+    labels:
+      - dependencies
+      - deps
+    collapse-after: 15
+
+change-template: '- $TITLE @$AUTHOR (#$NUMBER)'
+change-title-escapes: '\<*_&' # You can add # and @ to disable mentions, and add ` to disable code blocks.
+
+version-resolver:
+  major:
+    labels:
+      - 'major'
+  minor:
+    labels:
+      - 'minor'
+  patch:
+    labels:
+      - 'patch'
+  default: patch
+
+exclude-labels:
+  - skip-changelog
+  - no-changelog
+  - invalid
+  - reverted
+  - rollback
+
+replacers:
+  - search: '/DOPS-(\d+)/g'
+    replace: 'https://issuecenter.atlassian.net/browse/DOPS-$1'
+  - search: '/CVE-(\d{4})-(\d+)/g'
+    replace: 'https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-$1-$2'
+
+autolabeler:
+  - label: 'chore'
+    files:
+      - '*.md'
+      - '.github/**'
+
+template: |
+  ## What Changed 🧐
+
+  $CHANGES
+  **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
