@@ -58,14 +58,14 @@ jobs:
 
       # https://github.com/github/codeql-action
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@dc49dcabdb86371d19197fcae2585f548bbbc395 # v3.26.6
+        uses: github/codeql-action/init@624d0bca90f761ffa7ce50c41875a1a226969a02 # v3.26.6
         with:
           languages: javascript
           token: ${{ steps.app-token.outputs.token }}
 
       # https://github.com/github/codeql-action
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@dc49dcabdb86371d19197fcae2585f548bbbc395 # v3.26.6
+        uses: github/codeql-action/analyze@624d0bca90f761ffa7ce50c41875a1a226969a02 # v3.26.6
 
   node-tests:
     name: "Runs unit tests"
